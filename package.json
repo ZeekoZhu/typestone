@@ -1,0 +1,18 @@
+{
+  "name": "type-stone",
+  "version": "0.0.1",
+  "description": "A template extension for typescript.",
+  "main": "index.js",
+  "scripts": {
+    "start": "lite-server"
+  },
+  "keywords": [
+    "template"
+  ],
+  "author": "zeeko",
+  "license": "ISC",
+  "dependencies": {
+    "lite-server": "^2.2.2",
+    "reflect-metadata": "^0.1.8"
+  }
+}
