@@ -10,3 +10,17 @@
 ## Progress
 - One-Way binding for attribute. (Done)
 - One-Way binding for text. (working)
+
+## Usage
+
+由于才刚开始，没啥使用指南
+
+安装开发环境
+```
+npm install
+```
+
+进入开发环境
+```
+npm start
+```

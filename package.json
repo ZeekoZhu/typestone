@@ -12,7 +12,9 @@
   "author": "zeeko",
   "license": "ISC",
   "dependencies": {
-    "lite-server": "^2.2.2",
     "reflect-metadata": "^0.1.8"
+  },
+  "devDependencies": {
+    "lite-server": "^2.2.2"
   }
 }

@@ -1,4 +1,5 @@
 // import '../node_modules/reflect-metadata/Reflect.js';
+// 上面的注释去掉会出现奇怪的问题
 
 class Model {
 	public Template: Element;
