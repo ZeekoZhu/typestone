@@ -1,6 +1,9 @@
 // import '../node_modules/reflect-metadata/Reflect.js';
 // 上面的注释去掉会出现奇怪的问题
 
+/// <reference path="./linq.ts" />
+
+
 class Model {
 	public Template: Element;
 	public Result: Element;
@@ -10,16 +13,17 @@ class Model {
 	@Data
 	public Name: string;
 
+	@Data
+	public Age: number;
+
 
 
 	constructor(private selector: string) {
-		this.Watchers = new Array<Watcher>()
+		this.Watchers = new Array<Watcher>();
 		this.Template = document.querySelector(selector);
 		let temp = document.createDocumentFragment();
 		temp.appendChild(this.Template.cloneNode(true));
 		this.AddWatcher(this.Template.firstChild);
-		// this.MarkView(this.Template);
-		// let temp = Model.ConvertToHtml(this.Template.querySelector('#test'));
 	}
 
 	/**
@@ -36,36 +40,92 @@ class Model {
 	}
 
 	/**
-	 * 标记视图
+	 * 给模板加上监听器的函数
+	 *
+	 * 遍历 Node 中的所有的特性和文本节点
 	 * 
-	 * @param {Node} template
+	 * @param {Node} template 模板对象
 	 */
 	AddWatcher(template: Node) {
 		if (template === null) {
 			return;
 		}
 		let currentNode = template;
+		console.log(Model.ConvertToHtml(currentNode, false));
+		console.info(currentNode);
 
+		switch (currentNode.nodeType) {
+			case 3:
+				let content = currentNode.nodeValue;
+				let temps = content.match(/\{\{\w+\}\}/g);
+				if (temps) {
+					temps.forEach(temp => {
+						let propKey = temp.substring(2, temp.length - 2);
+						let watcher = this.Watchers.FirstOrDefault(w => {
+							return w.propertyKey === propKey;
+						});
+						let isNew: boolean = false;
+						if (watcher == null) {
+							watcher = new Watcher();
+							isNew = true;
+						}
+
+						let templates = {};
+
+						if (watcher.elements.indexOf(currentNode as Element) < 0) {
+							watcher.elements.push(currentNode as Element);
+							templates['text'] = content;
+							watcher.templates.push(templates);
+						}
+						// else {
+						// 	watcher.templates[watcher.elements.length - 1]["attrValue.name"] = attrValue.value;
+						// }
+						if (isNew) {
+							watcher.propertyKey = propKey;
+							this.Watchers.push(watcher);
+						}
+					});
+				}
+		}
+
+		// 首先寻找 attribute 里面的模板哟
 		for (let key in currentNode.attributes) {
 			if (currentNode.attributes.hasOwnProperty(key)) {
 				let attrValue = currentNode.attributes[key];
-				let temp = attrValue.value.match(/\{\{\w+\}\}/g);
-				if (temp) {
-					let propKey = temp[0].substring(2, temp[0].length - 2);
-					let watcher = new Watcher();
-					watcher.currentValue = this[propKey];
-					let attrs = {};
+				let temps = attrValue.value.match(/\{\{\w+\}\}/g);
+				if (temps) {
+					temps.forEach(temp => {
+						// let temp = temps[index];
+						// 解析属性名
+						let propKey = temp.substring(2, temp.length - 2);
+						// 寻找已经存在的属性监视器
+						let isNew: boolean = false;
+						let watcher = this.Watchers.FirstOrDefault(w => {
+							return w.propertyKey === propKey;
+						});
+						if (watcher == null) {
+							watcher = new Watcher();
+							isNew = true;
+						}
+						watcher.currentValue = this[propKey];
 
-					if (watcher.elements.indexOf(currentNode as Element) < 0) {
-						watcher.elements.push(currentNode as Element);
-						attrs[attrValue.name] = temp[0];
-						watcher.attrs.push(attrs);
-					}
-					else {
-						watcher.attrs[watcher.elements.length - 1][key] = temp[0];
-					}
-					watcher.propertyKey = propKey;
-					this.Watchers.push(watcher);
+						// 用来存放属性的对象
+						let attributes = {};
+
+						// 绑定添加元素监视
+						if (watcher.elements.indexOf(currentNode as Element) < 0) {
+							watcher.elements.push(currentNode as Element);
+							attributes[attrValue.name] = attrValue.value;
+							watcher.templates.push(attributes);
+						}
+						else {
+							watcher.templates[watcher.elements.length - 1][attrValue.name] = attrValue.value;
+						}
+						if (isNew) {
+							watcher.propertyKey = propKey;
+							this.Watchers.push(watcher);
+						}
+					});
 				}
 			}
 		}
@@ -73,9 +133,6 @@ class Model {
 
 		this.AddWatcher(currentNode.nextSibling);
 		this.AddWatcher(currentNode.firstChild);
-		// if(template.nextSibling){
-		// 	Model.MarkView(template);
-		// }
 	}
 
 	static HasTemplate(node: Node) {
@@ -84,6 +141,13 @@ class Model {
 }
 
 
+
+/**
+ * Data 特性
+ * 
+ * @param {*} target
+ * @param {string} key
+ */
 function Data(target: any, key: string) {
 	let model = this as Model;
 
@@ -109,15 +173,20 @@ function Data(target: any, key: string) {
 		}
 		else {
 			watcher[0].elements.forEach((value, index) => {
-				let attrs = watcher[0].attrs[index];
-				for (let key in attrs) {
-					if (attrs.hasOwnProperty(key)) {
-						let attrValue = attrs[key];
-						let result = Stone(attrValue, _this);
-						value.setAttribute(key, result);
+				let templates = watcher[0].templates[index];
+				for (let key in templates) {
+					if (templates.hasOwnProperty(key)) {
+						let template = templates[key];
+						let result = Stone(template, _this);
+						if (key === 'text') {
+							value.textContent = result;
+						}
+						else {
+							value.setAttribute(key, result);
+						}
 					}
 				}
-			})
+			});
 		}
 	};
 
@@ -138,9 +207,8 @@ function Data(target: any, key: string) {
 class Watcher {
 	public currentValue: string | number;
 	public propertyKey: string;
-	public template: string;
 	public elements: Element[] = new Array();
-	public attrs: any[] = new Array();
+	public templates: any[] = new Array();
 
 	public Update(value: string | number) {
 		if (value === this.currentValue) {
@@ -158,7 +226,16 @@ class Watcher {
 
 let test = new Model('#test');
 test.Name = 'zeeko';
+console.log(test);
 
+
+/**
+ * 模板处理函数
+ * 
+ * @param {string} templateStr
+ * @param {*} dataObj
+ * @returns
+ */
 function Stone(templateStr: string, dataObj: any) {
 
 	function getTempName(tempStr) {

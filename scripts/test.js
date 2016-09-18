@@ -1,4 +1,5 @@
 // import '../node_modules/reflect-metadata/Reflect.js';
+// 上面的注释去掉会出现奇怪的问题
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -8,6 +9,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+/// <reference path="./linq.ts" />
 var Model = (function () {
     function Model(selector) {
         this.selector = selector;
@@ -16,8 +18,6 @@ var Model = (function () {
         var temp = document.createDocumentFragment();
         temp.appendChild(this.Template.cloneNode(true));
         this.AddWatcher(this.Template.firstChild);
-        // this.MarkView(this.Template);
-        // let temp = Model.ConvertToHtml(this.Template.querySelector('#test'));
     }
     /**
      * 将 node 节点对象转化为 string
@@ -33,42 +33,95 @@ var Model = (function () {
         return ele.innerHTML;
     };
     /**
-     * 标记视图
+     * 给模板加上监听器的函数
      *
-     * @param {Node} template
+     * 遍历 Node 中的所有的特性和文本节点
+     *
+     * @param {Node} template 模板对象
      */
     Model.prototype.AddWatcher = function (template) {
+        var _this = this;
         if (template === null) {
             return;
         }
         var currentNode = template;
-        for (var key in currentNode.attributes) {
+        console.log(Model.ConvertToHtml(currentNode, false));
+        console.info(currentNode);
+        switch (currentNode.nodeType) {
+            case 3:
+                var content_1 = currentNode.nodeValue;
+                var temps = content_1.match(/\{\{\w+\}\}/g);
+                if (temps) {
+                    temps.forEach(function (temp) {
+                        var propKey = temp.substring(2, temp.length - 2);
+                        var watcher = _this.Watchers.FirstOrDefault(function (w) {
+                            return w.propertyKey === propKey;
+                        });
+                        var isNew = false;
+                        if (watcher == null) {
+                            watcher = new Watcher();
+                            isNew = true;
+                        }
+                        var templates = {};
+                        if (watcher.elements.indexOf(currentNode) < 0) {
+                            watcher.elements.push(currentNode);
+                            templates['text'] = content_1;
+                            watcher.templates.push(templates);
+                        }
+                        // else {
+                        // 	watcher.templates[watcher.elements.length - 1]["attrValue.name"] = attrValue.value;
+                        // }
+                        if (isNew) {
+                            watcher.propertyKey = propKey;
+                            _this.Watchers.push(watcher);
+                        }
+                    });
+                }
+        }
+        // 首先寻找 attribute 里面的模板哟
+        var _loop_1 = function(key) {
             if (currentNode.attributes.hasOwnProperty(key)) {
-                var attrValue = currentNode.attributes[key];
-                var temp = attrValue.value.match(/\{\{\w+\}\}/g);
-                if (temp) {
-                    var propKey = temp[0].substring(2, temp[0].length - 2);
-                    var watcher = new Watcher();
-                    watcher.currentValue = this[propKey];
-                    var attrs = {};
-                    if (watcher.elements.indexOf(currentNode) < 0) {
-                        watcher.elements.push(currentNode);
-                        attrs[attrValue.name] = temp[0];
-                        watcher.attrs.push(attrs);
-                    }
-                    else {
-                        watcher.attrs[watcher.elements.length - 1][key] = temp[0];
-                    }
-                    watcher.propertyKey = propKey;
-                    this.Watchers.push(watcher);
+                var attrValue_1 = currentNode.attributes[key];
+                var temps = attrValue_1.value.match(/\{\{\w+\}\}/g);
+                if (temps) {
+                    temps.forEach(function (temp) {
+                        // let temp = temps[index];
+                        // 解析属性名
+                        var propKey = temp.substring(2, temp.length - 2);
+                        // 寻找已经存在的属性监视器
+                        var isNew = false;
+                        var watcher = _this.Watchers.FirstOrDefault(function (w) {
+                            return w.propertyKey === propKey;
+                        });
+                        if (watcher == null) {
+                            watcher = new Watcher();
+                            isNew = true;
+                        }
+                        watcher.currentValue = _this[propKey];
+                        // 用来存放属性的对象
+                        var attributes = {};
+                        // 绑定添加元素监视
+                        if (watcher.elements.indexOf(currentNode) < 0) {
+                            watcher.elements.push(currentNode);
+                            attributes[attrValue_1.name] = attrValue_1.value;
+                            watcher.templates.push(attributes);
+                        }
+                        else {
+                            watcher.templates[watcher.elements.length - 1][attrValue_1.name] = attrValue_1.value;
+                        }
+                        if (isNew) {
+                            watcher.propertyKey = propKey;
+                            _this.Watchers.push(watcher);
+                        }
+                    });
                 }
             }
+        };
+        for (var key in currentNode.attributes) {
+            _loop_1(key);
         }
         this.AddWatcher(currentNode.nextSibling);
         this.AddWatcher(currentNode.firstChild);
-        // if(template.nextSibling){
-        // 	Model.MarkView(template);
-        // }
     };
     Model.HasTemplate = function (node) {
     };
@@ -76,8 +129,18 @@ var Model = (function () {
         Data, 
         __metadata('design:type', String)
     ], Model.prototype, "Name", void 0);
+    __decorate([
+        Data, 
+        __metadata('design:type', Number)
+    ], Model.prototype, "Age", void 0);
     return Model;
 }());
+/**
+ * Data 特性
+ *
+ * @param {*} target
+ * @param {string} key
+ */
 function Data(target, key) {
     var model = this;
     var _val = model[key];
@@ -101,12 +164,17 @@ function Data(target, key) {
         }
         else {
             watcher[0].elements.forEach(function (value, index) {
-                var attrs = watcher[0].attrs[index];
-                for (var key_1 in attrs) {
-                    if (attrs.hasOwnProperty(key_1)) {
-                        var attrValue = attrs[key_1];
-                        var result = Stone(attrValue, _this);
-                        value.setAttribute(key_1, result);
+                var templates = watcher[0].templates[index];
+                for (var key_1 in templates) {
+                    if (templates.hasOwnProperty(key_1)) {
+                        var template = templates[key_1];
+                        var result = Stone(template, _this);
+                        if (key_1 === 'text') {
+                            value.textContent = result;
+                        }
+                        else {
+                            value.setAttribute(key_1, result);
+                        }
                     }
                 }
             });
@@ -126,7 +194,7 @@ function Data(target, key) {
 var Watcher = (function () {
     function Watcher() {
         this.elements = new Array();
-        this.attrs = new Array();
+        this.templates = new Array();
     }
     Watcher.prototype.Update = function (value) {
         if (value === this.currentValue) {
@@ -140,6 +208,14 @@ var Watcher = (function () {
 }());
 var test = new Model('#test');
 test.Name = 'zeeko';
+console.log(test);
+/**
+ * 模板处理函数
+ *
+ * @param {string} templateStr
+ * @param {*} dataObj
+ * @returns
+ */
 function Stone(templateStr, dataObj) {
     function getTempName(tempStr) {
         return tempStr.substring(2, tempStr.length - 2);
