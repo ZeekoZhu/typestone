@@ -4,6 +4,8 @@
 
 ## Features
 - One-Way binding between View and Model
+- Shadow Data (working)
+- Replace Recurse (working)
 - Two-Way binding between View and Model (working)
 - template expression (working)
 
