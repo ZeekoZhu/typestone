@@ -1,5 +1,14 @@
-// import '../node_modules/reflect-metadata/Reflect.js';
-// 上面的注释去掉会出现奇怪的问题
+/// <reference path="./linq.ts" />
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -9,11 +18,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-/// <reference path="./linq.ts" />
 var Model = (function () {
     function Model(selector) {
         this.selector = selector;
-        this.Watchers = new Array();
+        this.Watchers = [];
         this.Template = document.querySelector(selector);
         var temp = document.createDocumentFragment();
         temp.appendChild(this.Template.cloneNode(true));
@@ -32,6 +40,36 @@ var Model = (function () {
         ele.appendChild(element.cloneNode(deep));
         return ele.innerHTML;
     };
+    Model.DetectTemplate = function (target) {
+        var result = new Array();
+        // let tmp: DetectTemplateResult = ;
+        var templateReg = /\{\{\w+\}\}/g;
+        switch (target.nodeType) {
+            // 对于文本节点检查文本内容
+            case Node.TEXT_NODE:
+                var tmp = (target.nodeValue.match(templateReg) || [])
+                    .map(function (str) { return new DetectTemplateResult(str.substring(2, str.length - 2), '*text', target.nodeValue); });
+                if (tmp && tmp.length > 0) {
+                    result.push.apply(result, tmp);
+                }
+                break;
+            // 对于元素节点，检查 attributes
+            case Node.ELEMENT_NODE:
+                var _loop_1 = function (i) {
+                    var attr = target.attributes[i];
+                    var tmp_1 = (attr.value.match(templateReg) || [])
+                        .map(function (str) { return new DetectTemplateResult(str.substring(2, str.length - 2), attr.nodeName, attr.value); });
+                    if (tmp_1 && tmp_1.length > 0) {
+                        result.push.apply(result, tmp_1);
+                    }
+                };
+                for (var i = 0; i < target.attributes.length; i++) {
+                    _loop_1(i);
+                }
+                break;
+        }
+        return result;
+    };
     /**
      * 给模板加上监听器的函数
      *
@@ -39,101 +77,49 @@ var Model = (function () {
      *
      * @param {Node} template 模板对象
      */
-    Model.prototype.AddWatcher = function (template) {
+    Model.prototype.AddWatcher = function (target) {
         var _this = this;
-        if (template === null) {
+        if (target === null) {
             return;
         }
-        var currentNode = template;
-        console.log(Model.ConvertToHtml(currentNode, false));
-        console.info(currentNode);
-        switch (currentNode.nodeType) {
-            case 3:
-                var content_1 = currentNode.nodeValue;
-                var temps = content_1.match(/\{\{\w+\}\}/g);
-                if (temps) {
-                    temps.forEach(function (temp) {
-                        var propKey = temp.substring(2, temp.length - 2);
-                        var watcher = _this.Watchers.FirstOrDefault(function (w) {
-                            return w.propertyKey === propKey;
-                        });
-                        var isNew = false;
-                        if (watcher == null) {
-                            watcher = new Watcher();
-                            isNew = true;
-                        }
-                        var templates = {};
-                        if (watcher.elements.indexOf(currentNode) < 0) {
-                            watcher.elements.push(currentNode);
-                            templates['text'] = content_1;
-                            watcher.templates.push(templates);
-                        }
-                        // else {
-                        // 	watcher.templates[watcher.elements.length - 1]["attrValue.name"] = attrValue.value;
-                        // }
-                        if (isNew) {
-                            watcher.propertyKey = propKey;
-                            _this.Watchers.push(watcher);
-                        }
-                    });
+        var currentNode = target;
+        var templates = Model.DetectTemplate(target);
+        if (templates.length > 0) {
+            templates.forEach(function (t) {
+                // 检查是否对此属性设置了监视器
+                var watcher = _this.Watchers.FirstOrDefault(function (w) { return w.propertyKey === t.propKey; }) || new Watcher();
+                if (watcher.elements.length === 0) {
+                    // 没有设置，就新建一个监视器
+                    _this.Watchers.push(watcher);
                 }
-        }
-        // 首先寻找 attribute 里面的模板哟
-        var _loop_1 = function(key) {
-            if (currentNode.attributes.hasOwnProperty(key)) {
-                var attrValue_1 = currentNode.attributes[key];
-                var temps = attrValue_1.value.match(/\{\{\w+\}\}/g);
-                if (temps) {
-                    temps.forEach(function (temp) {
-                        // let temp = temps[index];
-                        // 解析属性名
-                        var propKey = temp.substring(2, temp.length - 2);
-                        // 寻找已经存在的属性监视器
-                        var isNew = false;
-                        var watcher = _this.Watchers.FirstOrDefault(function (w) {
-                            return w.propertyKey === propKey;
-                        });
-                        if (watcher == null) {
-                            watcher = new Watcher();
-                            isNew = true;
-                        }
-                        watcher.currentValue = _this[propKey];
-                        // 用来存放属性的对象
-                        var attributes = {};
-                        // 绑定添加元素监视
-                        if (watcher.elements.indexOf(currentNode) < 0) {
-                            watcher.elements.push(currentNode);
-                            attributes[attrValue_1.name] = attrValue_1.value;
-                            watcher.templates.push(attributes);
-                        }
-                        else {
-                            watcher.templates[watcher.elements.length - 1][attrValue_1.name] = attrValue_1.value;
-                        }
-                        if (isNew) {
-                            watcher.propertyKey = propKey;
-                            _this.Watchers.push(watcher);
-                        }
-                    });
+                watcher.propertyKey = t.propKey;
+                var watched = watcher.elements.FirstOrDefault(function (e) { return e.element === currentNode; });
+                // 检查是否对当前结点设置了监视器
+                if (!watched) {
+                    // 没有设置，就新建一个监视器
+                    watched = {
+                        element: currentNode,
+                        templates: {}
+                    };
+                    watcher.elements.push(watched);
                 }
-            }
-        };
-        for (var key in currentNode.attributes) {
-            _loop_1(key);
+                ;
+                // 为此节点添加模板
+                watched.templates[t.templateKey] = t.templateStr;
+            });
         }
         this.AddWatcher(currentNode.nextSibling);
         this.AddWatcher(currentNode.firstChild);
     };
-    Model.HasTemplate = function (node) {
-    };
-    __decorate([
-        Data, 
-        __metadata('design:type', String)
-    ], Model.prototype, "Name", void 0);
-    __decorate([
-        Data, 
-        __metadata('design:type', Number)
-    ], Model.prototype, "Age", void 0);
     return Model;
+}());
+var DetectTemplateResult = (function () {
+    function DetectTemplateResult(propKey, templateKey, templateStr) {
+        this.propKey = propKey;
+        this.templateKey = templateKey;
+        this.templateStr = templateStr;
+    }
+    return DetectTemplateResult;
 }());
 /**
  * Data 特性
@@ -156,24 +142,31 @@ function Data(target, key) {
         if (!_this.Watchers) {
             return;
         }
-        var watcher = _this.Watchers.filter(function (value) {
+        var watcher = _this.Watchers.FirstOrDefault(function (value) {
             return value.propertyKey === key;
         });
-        if (watcher === null) {
+        if (!watcher) {
             return;
         }
         else {
-            watcher[0].elements.forEach(function (value, index) {
-                var templates = watcher[0].templates[index];
+            if (watcher.currentValue === newVal) {
+                console.log('same');
+                return;
+            }
+            else {
+                watcher.currentValue = newVal;
+            }
+            watcher.elements.forEach(function (value, index) {
+                var templates = watcher.elements[index].templates;
                 for (var key_1 in templates) {
                     if (templates.hasOwnProperty(key_1)) {
                         var template = templates[key_1];
                         var result = Stone(template, _this);
-                        if (key_1 === 'text') {
-                            value.textContent = result;
+                        if (key_1 === '*text') {
+                            value.element.textContent = result;
                         }
                         else {
-                            value.setAttribute(key_1, result);
+                            value.element.setAttribute(key_1, result);
                         }
                     }
                 }
@@ -193,8 +186,7 @@ function Data(target, key) {
 }
 var Watcher = (function () {
     function Watcher() {
-        this.elements = new Array();
-        this.templates = new Array();
+        this.elements = [];
     }
     Watcher.prototype.Update = function (value) {
         if (value === this.currentValue) {
@@ -206,8 +198,30 @@ var Watcher = (function () {
     };
     return Watcher;
 }());
-var test = new Model('#test');
+var WatchedElement = (function () {
+    function WatchedElement() {
+        this.templates = {};
+    }
+    return WatchedElement;
+}());
+var MyModel = (function (_super) {
+    __extends(MyModel, _super);
+    function MyModel() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    return MyModel;
+}(Model));
+__decorate([
+    Data,
+    __metadata("design:type", String)
+], MyModel.prototype, "Name", void 0);
+__decorate([
+    Data,
+    __metadata("design:type", Number)
+], MyModel.prototype, "Age", void 0);
+var test = new MyModel('#test');
 test.Name = 'zeeko';
+test.Age = 12;
 console.log(test);
 /**
  * 模板处理函数
