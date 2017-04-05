@@ -70,35 +70,41 @@ class Model {
         if (target === null) {
             return;
         }
-        let currentNode = target;
-
-        let templates = Model.DetectTemplate(target);
-        if (templates.length > 0) {
-            templates.forEach(t => {
-                // 检查是否对此属性设置了监视器
-                let watcher = this.Watchers.FirstOrDefault(w => w.propertyKey === t.propKey) || new Watcher();
-                if (watcher.elements.length === 0) {
-                    // 没有设置，就新建一个监视器
-                    this.Watchers.push(watcher);
-                }
-                watcher.propertyKey = t.propKey;
-                let watched = watcher.elements.FirstOrDefault(e => e.element === currentNode);
-                // 检查是否对当前结点设置了监视器
-                if (!watched) {
-                    // 没有设置，就新建一个监视器
-                    watched = {
-                        element: currentNode as Element,
-                        templates: {}
+        let nodeStack = [target];
+        while (nodeStack.length > 0) {
+            let currentNode = nodeStack[nodeStack.length - 1];
+            let templates = Model.DetectTemplate(currentNode);
+            if (templates.length > 0) {
+                templates.forEach(t => {
+                    // 检查是否对此属性设置了监视器
+                    let watcher = this.Watchers.FirstOrDefault(w => w.propertyKey === t.propKey) || new Watcher();
+                    if (watcher.elements.length === 0) {
+                        // 没有设置，就新建一个监视器
+                        this.Watchers.push(watcher);
+                    }
+                    watcher.propertyKey = t.propKey;
+                    let watched = watcher.elements.FirstOrDefault(e => e.element === currentNode);
+                    // 检查是否对当前结点设置了监视器
+                    if (!watched) {
+                        // 没有设置，就新建一个监视器
+                        watched = {
+                            element: currentNode as Element,
+                            templates: {}
+                        };
+                        watcher.elements.push(watched);
                     };
-                    watcher.elements.push(watched);
-                };
-                // 为此节点添加模板
-                watched.templates[t.templateKey] = t.templateStr;
-            });
+                    // 为此节点添加模板
+                    watched.templates[t.templateKey] = t.templateStr;
+                });
+            }
+            nodeStack.pop();
+            if (currentNode.firstChild) {
+                nodeStack.push(currentNode.firstChild);
+            }
+            if (currentNode.nextSibling) {
+                nodeStack.push(currentNode.nextSibling);
+            }
         }
-
-        this.AddWatcher(currentNode.nextSibling);
-        this.AddWatcher(currentNode.firstChild);
     }
 }
 
@@ -141,8 +147,6 @@ function Data(target: any, key: string) {
         console.log(`Set: ${key} => ${newVal}`);
         _val = newVal;
         let _this = this as Model;
-        console.log(_this.Watchers);
-        console.log(_this);
         if (!_this.Watchers) {
             return;
         }
