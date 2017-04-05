@@ -105,8 +105,17 @@ class Model {
 class DetectTemplateResult {
 
     constructor(
+        /**
+         * 属性名
+         */
         public propKey: string,
+        /**
+         * 模板类型
+         */
         public templateKey: string,
+        /**
+         * 模板字符串
+         */
         public templateStr: string
     ) { }
 }
@@ -132,6 +141,8 @@ function Data(target: any, key: string) {
         console.log(`Set: ${key} => ${newVal}`);
         _val = newVal;
         let _this = this as Model;
+        console.log(_this.Watchers);
+        console.log(_this);
         if (!_this.Watchers) {
             return;
         }
@@ -178,6 +189,16 @@ function Data(target: any, key: string) {
 
 }
 
+function Compute(target: Object, key: string, desciptor: TypedPropertyDescriptor<any>) {
+    let originSetter = desciptor.set;
+    console.info(target);
+    desciptor.set = function (newVal) {
+        console.log(`Set value via setter: ${key} => ${newVal}`);
+        originSetter.apply(this, [newVal]);
+    }
+    return desciptor;
+}
+
 class Watcher {
     public currentValue: string | number;
     public propertyKey: string;
@@ -203,6 +224,15 @@ class WatchedElement {
 class MyModel extends Model {
     @Data Name: string;
     @Data Age: number;
+    fucker: string;
+    @Compute set Fucker(val) {
+        this.fucker = `${val} the fucker`;
+        this.Name = this.fucker;
+    }
+
+    get Fucker() {
+        return this.fucker;
+    }
 }
 
 let test = new MyModel('#test');
