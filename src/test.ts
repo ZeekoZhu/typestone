@@ -30,26 +30,39 @@ class Model {
     }
 
     private static DetectTemplate(target: Node) {
-        let result = new Array<DetectTemplateResult>();
+        let result = new Array<DetectTemplateResult | EventTemplateResult>();
         // let tmp: DetectTemplateResult = ;
-        let templateReg = /\{\{\w+\}\}/g;
+        let templateReg = /\{\{.+?\}\}/g;
         switch (target.nodeType) {
             // 对于文本节点检查文本内容
             case Node.TEXT_NODE:
-                let tmp = (target.nodeValue.match(templateReg) || [])
-                    .map(str => new DetectTemplateResult(str.substring(2, str.length - 2), '*text', target.nodeValue));
-                if (tmp && tmp.length > 0) {
-                    result.push(...tmp);
+                let temps = target.nodeValue.match(templateReg);
+                if (temps) {
+                    let tmp = (target.nodeValue.match(templateReg) || [])
+                        .map(str => new DetectTemplateResult(str.substring(2, str.length - 2), '*text', target.nodeValue));
+                    if (tmp && tmp.length > 0) {
+                        result.push(...tmp);
+                    }
                 }
                 break;
             // 对于元素节点，检查 attributes
             case Node.ELEMENT_NODE:
                 for (let i = 0; i < target.attributes.length; i++) {
                     let attr = target.attributes[i];
-                    let tmp = (attr.value.match(templateReg) || [])
-                        .map(str => new DetectTemplateResult(str.substring(2, str.length - 2), attr.nodeName, attr.value));
-                    if (tmp && tmp.length > 0) {
-                        result.push(...tmp);
+                    let temps = attr.value.match(templateReg);
+                    if (temps) {
+                        let tmp = temps
+                            .map(str => new DetectTemplateResult(str.substring(2, str.length - 2), attr.nodeName, attr.value));
+                        if (tmp && tmp.length > 0) {
+                            result.push(...tmp);
+                        }
+                    } else {
+                        let directiveReg = /#ts\.\w+/g;
+                        let directives = attr.name.match(directiveReg);
+                        if (directives) {
+                            let event = directives[0].substring(4, directives[0].length);
+                            result.push(new EventTemplateResult(event, attr.value));
+                        }
                     }
                 }
                 break;
@@ -76,25 +89,31 @@ class Model {
             let templates = Model.DetectTemplate(currentNode);
             if (templates.length > 0) {
                 templates.forEach(t => {
-                    // 检查是否对此属性设置了监视器
-                    let watcher = this.Watchers.FirstOrDefault(w => w.propertyKey === t.propKey) || new Watcher();
-                    if (watcher.elements.length === 0) {
-                        // 没有设置，就新建一个监视器
-                        this.Watchers.push(watcher);
-                    }
-                    watcher.propertyKey = t.propKey;
-                    let watched = watcher.elements.FirstOrDefault(e => e.element === currentNode);
-                    // 检查是否对当前结点设置了监视器
-                    if (!watched) {
-                        // 没有设置，就新建一个监视器
-                        watched = {
-                            element: currentNode as Element,
-                            templates: {}
+                    if (t instanceof DetectTemplateResult) {
+                        // 检查是否对此属性设置了监视器
+                        let watcher = this.Watchers.FirstOrDefault(w => w.propertyKey === t.propKey) || new Watcher();
+                        if (watcher.elements.length === 0) {
+                            // 没有设置，就新建一个监视器
+                            this.Watchers.push(watcher);
+                        }
+                        watcher.propertyKey = t.propKey;
+                        let watched = watcher.elements.FirstOrDefault(e => e.element === currentNode);
+                        // 检查是否对当前结点设置了监视器
+                        if (!watched) {
+                            // 没有设置，就新建一个监视器
+                            watched = {
+                                element: currentNode as Element,
+                                templates: {}
+                            };
+                            watcher.elements.push(watched);
                         };
-                        watcher.elements.push(watched);
-                    };
-                    // 为此节点添加模板
-                    watched.templates[t.templateKey] = t.templateStr;
+                        // 为此节点添加模板
+                        watched.templates[t.templateKey] = t.templateStr;
+                    } else {
+                        console.log(currentNode);
+                        console.log(t);
+                        currentNode.addEventListener(t.eventName, this[t.handlerTemplateStr]);
+                    }
                 });
             }
             nodeStack.pop();
@@ -123,6 +142,15 @@ class DetectTemplateResult {
          * 模板字符串
          */
         public templateStr: string
+    ) { }
+}
+
+
+
+class EventTemplateResult {
+    constructor(
+        public eventName: string,
+        public handlerTemplateStr: string
     ) { }
 }
 
@@ -186,7 +214,7 @@ function Data(target: any, key: string) {
         Object.defineProperty(target, key, {
             get: getter,
             set: setter,
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
     }
@@ -236,6 +264,10 @@ class MyModel extends Model {
 
     get Fucker() {
         return this.fucker;
+    }
+
+    clickHandler() {
+        alert('you clicked me!');
     }
 }
 

@@ -4,7 +4,6 @@
 
 ## Features
 - One-Way binding between View and Model
-- Replace Recursion algorithm (working)
 - Two-Way binding between View and Model (working)
 - template expression (working)
 

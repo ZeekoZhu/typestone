@@ -3,7 +3,7 @@
         "module": "amd",
         "target": "es5",
         "noImplicitAny": false,
-        "sourceMap": false,
+        "sourceMap": true,
         "outDir": "scripts",
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true
